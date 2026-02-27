@@ -49,6 +49,11 @@ def get_rotation():
         "rotation": encoder_system.data["rotation"]
     })
     
+@app.route('/api/pulse-count')
+def get_pulse_count():
+    """Simple endpoint that returns just the current pulse count"""
+    return str(encoder_system.data["pulses"])
+    
 @app.route("/motor/stop", methods=["POST", "GET"])
 def stop_motor():
     logger.info("✓ STOP BUTTON CLICKED IN WEB INTERFACE")

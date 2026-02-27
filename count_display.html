@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Pulse Count</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: black;
+            color: #00ff00;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .count-container {
+            text-align: center;
+        }
+        .count-label {
+            font-size: 2rem;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            opacity: 0.8;
+        }
+        .count-value {
+            font-size: 15rem;
+            font-weight: bold;
+            line-height: 1;
+            text-shadow: 0 0 20px #00ff00;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="count-container">
+        <div class="count-label">Pulse Count</div>
+        <div class="count-value" id="pulseCount">0</div>
+    </div>
+
+    <script>
+        function updateCount() {
+            fetch('http://localhost:5000/api/pulse-count')
+                .then(response => response.text())
+                .then(count => {
+                    document.getElementById('pulseCount').textContent = count;
+                })
+                .catch(error => {
+                    console.error('Error fetching count:', error);
+                    document.getElementById('pulseCount').textContent = '---';
+                });
+        }
+        
+        // Update every 100ms for smooth display
+        updateCount();
+        setInterval(updateCount, 100);
+    </script>
+</body>
+</html>
