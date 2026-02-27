@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fabric Length Monitor</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #2d2d2d;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+            width: 400px;
+        }
+        h1 { font-size: 1.2rem; color: #aaa; text-transform: uppercase; letter-spacing: 2px; }
+        .measurement {
+            font-size: 5rem;
+            font-weight: bold;
+            color: #00ff88;
+            margin: 10px 0;
+        }
+        .unit { font-size: 1.5rem; color: #00ff88; }
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+            border-top: 1px solid #444;
+            padding-top: 20px;
+        }
+        .data-item { text-align: left; }
+        .label { display: block; font-size: 0.8rem; color: #888; }
+        .value { font-size: 1.1rem; font-weight: bold; }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+        .running { background-color: #004422; color: #00ff88; border: 1px solid #00ff88; }
+        .stopped { background-color: #441111; color: #ff4444; border: 1px solid #ff4444; }
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+        .motor-btn {
+            padding: 10px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .start-btn {
+            background-color: #004422;
+            color: #00ff88;
+            border: 1px solid #00ff88;
+        }
+        .start-btn:hover {
+            background-color: #006633;
+            transform: scale(1.05);
+        }
+        .stop-btn {
+            background-color: #441111;
+            color: #ff4444;
+            border: 1px solid #ff4444;
+        }
+        .stop-btn:hover {
+            background-color: #661111;
+            transform: scale(1.05);
+        }
+        .motor-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .command-log {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #1a1a1a;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #aaa;
+            text-align: left;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+        .command-item {
+            color: #00ff88;
+            margin: 2px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Fabric Measurement</h1>
+    
+    <div class="measurement">
+        <span id="cm">0.00</span><span class="unit">cm</span>
+    </div>
+
+    <div id="rotation-badge" class="status-badge stopped">Stopped</div>
+
+    <div class="data-grid">
+        <div class="data-item">
+            <span class="label">PULSE COUNT</span>
+            <span id="pulses" class="value">0</span>
+        </div>
+        <div class="data-item">
+            <span class="label">LAST UPDATE</span>
+            <span id="time" class="value">--:--:--</span>
+        </div>
+        <div class="data-item" style="grid-column: span 2;">
+            <span class="label">CONNECTION</span>
+            <span id="status" class="value" style="color: #0099ff;">Searching...</span>
+        </div>
+    </div>
+
+    <div class="button-container">
+        <button id="startMotor" class="motor-btn start-btn">START</button>
+        <button id="stopMotor" class="motor-btn stop-btn">STOP</button>
+    </div>
+
+    <!-- Command Log Display -->
+    <div class="command-log" id="commandLog">
+        <div>⏳ Waiting for commands...</div>
+    </div>
+</div>
+
+<script>
+    // Connect to the Flask-SocketIO server
+    const socket = io("http://localhost:5000");
+    const commandLog = document.getElementById("commandLog");
+
+    function addToLog(message) {
+        const logEntry = document.createElement("div");
+        logEntry.className = "command-item";
+        logEntry.innerHTML = `✓ ${message}`;
+        commandLog.appendChild(logEntry);
+        
+        // Keep only last 3 messages
+        while (commandLog.children.length > 3) {
+            commandLog.removeChild(commandLog.firstChild);
+        }
+    }
+
+    socket.on("connect", () => {
+        console.log("Connected to Server");
+        document.getElementById("status").innerHTML = "Connected";
+        document.getElementById("status").style.color = "#00ff88";
+        addToLog("Connected to server");
+    });
+
+    socket.on("encoder_update", function(data) {
+        // Update the big numbers
+        document.getElementById("cm").innerHTML = data.cm;
+        document.getElementById("pulses").innerHTML = data.pulses;
+        document.getElementById("time").innerHTML = data.last_update;
+        document.getElementById("status").innerHTML = data.status;
+
+        // Handle the Rotation Badge Style
+        const badge = document.getElementById("rotation-badge");
+        badge.innerHTML = data.rotation;
+        
+        if (data.rotation === "Running") {
+            badge.className = "status-badge running";
+        } else {
+            badge.className = "status-badge stopped";
+        }
+    });
+
+    // Special event for command confirmation
+    socket.on("command_received", function(data) {
+        addToLog(`${data.command} command received by server at ${data.timestamp}`);
+    });
+
+    socket.on("disconnect", () => {
+        document.getElementById("status").innerHTML = "Server Disconnected";
+        document.getElementById("status").style.color = "red";
+        addToLog("❌ Server disconnected");
+    });
+
+    // Motor Control Functions with visual feedback
+    document.getElementById("startMotor").addEventListener("click", function() {
+        addToLog("START button clicked - sending command...");
+        console.log("START button clicked - sending to server");
+        
+        fetch('/motor/start', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Start response:', data);
+                addToLog(`Server response: ${data.message} (${data.success ? '✓' : '✗'})`);
+                if (data.success) {
+                    this.style.backgroundColor = '#006633';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                addToLog(`❌ Error: ${error}`);
+            });
+    });
+
+    document.getElementById("stopMotor").addEventListener("click", function() {
+        addToLog("STOP button clicked - sending command...");
+        console.log("STOP button clicked - sending to server");
+        
+        fetch('/motor/stop', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Stop response:', data);
+                addToLog(`Server response: ${data.message} (${data.success ? '✓' : '✗'})`);
+                if (data.success) {
+                    this.style.backgroundColor = '#661111';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                addToLog(`❌ Error: ${error}`);
+            });
+    });
+</script>
+
+</body>
+</html>
