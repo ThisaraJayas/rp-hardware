@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO
+from receiver import register_receiver
 from hardware import encoder_system
 import threading
 import logging
@@ -14,6 +15,8 @@ app = Flask(__name__, static_folder='.')
 CORS(app)
 # threading mode is best for simple serial apps on Windows
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+register_receiver(app)
 
 # Pass the socket to the hardware logic so it can emit updates
 encoder_system.set_socket(socketio)

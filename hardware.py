@@ -6,8 +6,8 @@ import time
 # ================= SETTINGS =================
 SERIAL_PORT = 'COM3'
 BAUD_RATE = 115200
-PPR = 500
-WHEEL_DIAMETER = 5.0
+PPR = 1200
+WHEEL_DIAMETER = 3.8
 CIRCUMFERENCE = math.pi * WHEEL_DIAMETER
 STOP_TIMEOUT = 2.0  # seconds without pulse = stopped
 

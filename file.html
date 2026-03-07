@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FabricVision Dashboard</title>
+
+<style>
+
+body{
+    font-family: Arial, Helvetica, sans-serif;
+    background:#f4f6f9;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
+
+.card{
+    background:white;
+    padding:30px;
+    width:380px;
+    border-radius:10px;
+    box-shadow:0px 5px 15px rgba(0,0,0,0.1);
+}
+
+h2{
+    text-align:center;
+    margin-bottom:20px;
+}
+
+.row{
+    margin-bottom:12px;
+}
+
+.label{
+    font-weight:bold;
+}
+
+.colorbox{
+    display:inline-block;
+    width:14px;
+    height:14px;
+    border-radius:50%;
+    margin-left:6px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="card">
+
+<h2>Fabric Inspection</h2>
+
+<div class="row">
+<span class="label">Fabric Type:</span>
+<span id="pattern">-</span>
+</div>
+
+<div class="row">
+<span class="label">Pattern Type:</span>
+<span id="pattern_type">-</span>
+</div>
+
+<div class="row">
+<span class="label">Dominant Color:</span>
+<span id="dominant_color">-</span>
+<span id="dom_color_box" class="colorbox"></span>
+</div>
+
+<div class="row">
+<span class="label">Secondary Color:</span>
+<span id="secondary_color">-</span>
+<span id="sec_color_box" class="colorbox"></span>
+</div>
+
+<div class="row">
+<span class="label">Quality Score:</span>
+<span id="quality_score">-</span>
+</div>
+
+<div class="row">
+<span class="label">Enhancement Mode:</span>
+<span id="enhancement_mode">-</span>
+</div>
+
+<div class="row">
+<span class="label">Frames Processed:</span>
+<span id="frames_processed">-</span>
+</div>
+
+<div class="row">
+<span class="label">FPS:</span>
+<span id="fps">-</span>
+</div>
+
+</div>
+
+
+<script>
+
+async function fetchFabricState(){
+
+    try{
+
+        const response = await fetch("http://localhost:5000/api/fabric-state")
+
+        const data = await response.json()
+
+        document.getElementById("pattern").innerText = data.pattern
+        document.getElementById("pattern_type").innerText = data.pattern_type
+
+        document.getElementById("dominant_color").innerText = data.dominant_color
+        document.getElementById("secondary_color").innerText = data.secondary_color
+
+        document.getElementById("quality_score").innerText = data.quality_score
+        document.getElementById("enhancement_mode").innerText = data.enhancement_mode
+        document.getElementById("frames_processed").innerText = data.frames_processed
+        document.getElementById("fps").innerText = data.fps
+
+        // color preview circles
+        document.getElementById("dom_color_box").style.background = data.dominant_color
+        document.getElementById("sec_color_box").style.background = data.secondary_color
+
+    }
+    catch(error){
+
+        console.log("API error:",error)
+
+    }
+
+}
+
+fetchFabricState()
+
+setInterval(fetchFabricState,2000)
+
+</script>
+</body>
+</html>
