@@ -2,46 +2,173 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>FabricVision Dashboard</title>
+<title>FabricVision Operator Dashboard</title>
 
 <style>
 
+/* ==============================
+GLOBAL
+============================== */
+
 body{
-    font-family: Arial, Helvetica, sans-serif;
-    background:#f4f6f9;
+    margin:0;
+    font-family: "Segoe UI", Roboto, Arial;
+    background:#0f172a;
+    color:white;
+}
+
+/* ==============================
+HEADER
+============================== */
+
+.header{
+    width:100%;
+    background:#111827;
+    padding:18px 30px;
+    font-size:22px;
+    font-weight:600;
+    letter-spacing:1px;
+    border-bottom:2px solid #1f2937;
+}
+
+.header span{
+    color:#22c55e;
+}
+
+/* ==============================
+MAIN DASHBOARD
+============================== */
+
+.dashboard{
     display:flex;
     justify-content:center;
     align-items:center;
-    height:100vh;
+    height:calc(100vh - 70px);
 }
 
-.card{
-    background:white;
-    padding:30px;
-    width:380px;
-    border-radius:10px;
-    box-shadow:0px 5px 15px rgba(0,0,0,0.1);
+/* ==============================
+CARD PANEL
+============================== */
+
+.panel{
+
+    width:520px;
+
+    background:#1e293b;
+
+    border-radius:12px;
+
+    padding:35px;
+
+    box-shadow:
+        0px 10px 30px rgba(0,0,0,0.6),
+        inset 0 0 0 1px rgba(255,255,255,0.05);
 }
 
-h2{
+/* ==============================
+TITLE
+============================== */
+
+.panel h2{
+
     text-align:center;
-    margin-bottom:20px;
+
+    margin-bottom:25px;
+
+    font-weight:600;
+
+    letter-spacing:1px;
+
+    color:#38bdf8;
 }
+
+/* ==============================
+ROWS
+============================== */
 
 .row{
-    margin-bottom:12px;
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    padding:12px 10px;
+
+    margin-bottom:10px;
+
+    background:#0f172a;
+
+    border-radius:6px;
+
+    border-left:4px solid #334155;
 }
 
 .label{
-    font-weight:bold;
+
+    font-weight:600;
+
+    color:#94a3b8;
 }
 
+/* ==============================
+VALUE
+============================== */
+
+.value{
+
+    font-size:16px;
+
+    font-weight:500;
+}
+
+/* ==============================
+STATUS COLORS
+============================== */
+
+.patterned{
+
+    color:#22c55e;
+    font-weight:600;
+}
+
+.nonpatterned{
+
+    color:#f87171;
+    font-weight:600;
+}
+
+/* ==============================
+COLOR BOX
+============================== */
+
 .colorbox{
+
     display:inline-block;
+
     width:14px;
+
     height:14px;
+
     border-radius:50%;
-    margin-left:6px;
+
+    margin-left:8px;
+
+    border:1px solid #ccc;
+}
+
+/* ==============================
+METRIC HIGHLIGHTS
+============================== */
+
+.metric{
+
+    font-size:18px;
+
+    font-weight:700;
+
+    color:#facc15;
 }
 
 </style>
@@ -50,52 +177,63 @@ h2{
 
 <body>
 
-<div class="card">
+<div class="header">
+FabricVision <span>Operator Dashboard</span>
+</div>
 
-<h2>Fabric Inspection</h2>
+<div class="dashboard">
+
+<div class="panel">
+
+<h2>Fabric Inspection Status</h2>
 
 <div class="row">
-<span class="label">Fabric Type:</span>
-<span id="pattern">-</span>
+<div class="label">Fabric Type</div>
+<div id="pattern" class="value">-</div>
 </div>
 
 <div class="row">
-<span class="label">Pattern Type:</span>
-<span id="pattern_type">-</span>
+<div class="label">Pattern Type</div>
+<div id="pattern_type" class="value">-</div>
 </div>
 
 <div class="row">
-<span class="label">Dominant Color:</span>
-<span id="dominant_color">-</span>
+<div class="label">Dominant Color</div>
+<div>
+<span id="dominant_color" class="value">-</span>
 <span id="dom_color_box" class="colorbox"></span>
 </div>
+</div>
 
 <div class="row">
-<span class="label">Secondary Color:</span>
-<span id="secondary_color">-</span>
+<div class="label">Secondary Color</div>
+<div>
+<span id="secondary_color" class="value">-</span>
 <span id="sec_color_box" class="colorbox"></span>
 </div>
-
-<div class="row">
-<span class="label">Quality Score:</span>
-<span id="quality_score">-</span>
 </div>
 
 <div class="row">
-<span class="label">Enhancement Mode:</span>
-<span id="enhancement_mode">-</span>
+<div class="label">Quality Score</div>
+<div id="quality_score" class="value metric">-</div>
 </div>
 
 <div class="row">
-<span class="label">Frames Processed:</span>
-<span id="frames_processed">-</span>
+<div class="label">Enhancement Mode</div>
+<div id="enhancement_mode" class="value">-</div>
 </div>
 
 <div class="row">
-<span class="label">FPS:</span>
-<span id="fps">-</span>
+<div class="label">Frames Processed</div>
+<div id="frames_processed" class="value metric">-</div>
 </div>
 
+<div class="row">
+<div class="label">FPS</div>
+<div id="fps" class="value metric">-</div>
+</div>
+
+</div>
 </div>
 
 
@@ -109,7 +247,16 @@ async function fetchFabricState(){
 
         const data = await response.json()
 
-        document.getElementById("pattern").innerText = data.pattern
+        const patternEl = document.getElementById("pattern")
+
+        patternEl.innerText = data.pattern
+
+        if(data.pattern === "patterned"){
+            patternEl.className="value patterned"
+        }else{
+            patternEl.className="value nonpatterned"
+        }
+
         document.getElementById("pattern_type").innerText = data.pattern_type
 
         document.getElementById("dominant_color").innerText = data.dominant_color
@@ -120,7 +267,6 @@ async function fetchFabricState(){
         document.getElementById("frames_processed").innerText = data.frames_processed
         document.getElementById("fps").innerText = data.fps
 
-        // color preview circles
         document.getElementById("dom_color_box").style.background = data.dominant_color
         document.getElementById("sec_color_box").style.background = data.secondary_color
 
@@ -138,5 +284,6 @@ fetchFabricState()
 setInterval(fetchFabricState,2000)
 
 </script>
+
 </body>
 </html>
