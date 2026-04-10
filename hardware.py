@@ -1,4 +1,4 @@
-# hardware.py (enhanced with App 2's encoder_logic features - fixed indentation)
+# hardware.py
 
 import serial
 import serial.tools.list_ports
@@ -6,13 +6,13 @@ import threading
 import math
 import time
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from collections import deque
 import os
 import re
 
 # ================= SETTINGS =================
-SERIAL_PORT = 'COM3'
+SERIAL_PORT = 'COM4'
 BAUD_RATE = 115200
 PPR = 1200
 WHEEL_DIAMETER = 3.8
@@ -42,7 +42,7 @@ class FabricEncoder:
             "circumference": CIRCUMFERENCE,
             "serial_connected": False,
             "available_ports": [],
-            "motor_on": True
+            "motor_on": False
         }
 
         self.fabric_state = {
@@ -81,7 +81,6 @@ class FabricEncoder:
         print("Socket.IO instance set for encoder")
 
     def start(self):
-        """Start serial reader thread only once"""
         if self.thread and self.thread.is_alive():
             print("Encoder thread already running")
             return
@@ -97,17 +96,35 @@ class FabricEncoder:
                 self.ser.reset_output_buffer()
                 self.ser.write(cmd.encode("utf-8"))
                 self.ser.flush()
+                time.sleep(0.05)
 
                 with self.lock:
-                    self.data["motor_on"] = (cmd == '1')
+                    if cmd == '1':
+                        self.data["motor_on"] = True
+                        self.data["status"] = "Motor start command sent"
+                    elif cmd == '0':
+                        self.data["motor_on"] = False
+                        self.data["status"] = "Motor stop command sent"
+                        self.data["rotation"] = "Stopped"
+                        self.data["pulse_rate"] = 0
+                        self.data["current_pulse"] = 0
+                    self.data["last_update"] = datetime.now().strftime("%H:%M:%S")
 
-                print(f"SENT TO ARDUINO: {cmd}")
+                self._emit_update()
+                print(f"SENT TO ESP32: {cmd}")
                 return True
             else:
                 print("Serial port not open")
+                with self.lock:
+                    self.data["status"] = "Serial port not open"
+                    self.data["serial_connected"] = False
+                self._emit_update()
                 return False
         except Exception as e:
             print(f"Error sending command: {e}")
+            with self.lock:
+                self.data["status"] = f"Command send error: {str(e)}"
+            self._emit_update()
             return False
 
     def stop_motor(self):
@@ -176,7 +193,7 @@ class FabricEncoder:
                         if self.ser:
                             try:
                                 self.ser.close()
-                            except:
+                            except Exception:
                                 pass
                             self.ser = None
 
@@ -189,18 +206,23 @@ class FabricEncoder:
                             write_timeout=0.1
                         )
 
+                        time.sleep(2)
+
                         self.serial_connected = True
                         with self.lock:
                             self.data["status"] = f"Connected to {SERIAL_PORT}"
                             self.data["serial_connected"] = True
+                            self.data["last_update"] = datetime.now().strftime("%H:%M:%S")
 
                         print(f"Encoder connected to {SERIAL_PORT}")
+                        self._emit_update()
 
                     except serial.SerialException as e:
                         self.serial_connected = False
                         with self.lock:
                             self.data["status"] = f"Serial error: {str(e)}"
                             self.data["serial_connected"] = False
+                        self._emit_update()
                         time.sleep(reconnect_delay)
                         continue
 
@@ -208,9 +230,31 @@ class FabricEncoder:
                     try:
                         if self.ser.in_waiting > 0:
                             line = self.ser.readline().decode("utf-8", errors="ignore").strip()
+
+                            if not line:
+                                time.sleep(0.01)
+                                continue
+
                             print("SERIAL:", line)
 
-                            if "Pulse Count:" in line:
+                            if line.startswith("MSG:STARTED"):
+                                with self.lock:
+                                    self.data["motor_on"] = True
+                                    self.data["status"] = "Motor started"
+                                    self.data["last_update"] = datetime.now().strftime("%H:%M:%S")
+                                self._emit_update()
+
+                            elif line.startswith("MSG:STOPPED"):
+                                with self.lock:
+                                    self.data["motor_on"] = False
+                                    self.data["rotation"] = "Stopped"
+                                    self.data["pulse_rate"] = 0
+                                    self.data["current_pulse"] = 0
+                                    self.data["status"] = "Motor stopped"
+                                    self.data["last_update"] = datetime.now().strftime("%H:%M:%S")
+                                self._emit_update()
+
+                            elif "Pulse Count:" in line:
                                 try:
                                     count = int(line.split(":")[1].strip())
                                     self._process_pulse_count(count)
@@ -232,6 +276,7 @@ class FabricEncoder:
                         with self.lock:
                             self.data["status"] = f"Read error: {e}"
                             self.data["serial_connected"] = False
+                        self._emit_update()
 
                     self._check_stop_status()
 
@@ -243,6 +288,7 @@ class FabricEncoder:
                 with self.lock:
                     self.data["status"] = f"Error: {str(e)[:50]}"
                     self.data["serial_connected"] = False
+                self._emit_update()
                 time.sleep(1)
 
     def _process_pulse_count(self, count):
@@ -268,7 +314,8 @@ class FabricEncoder:
                 self.time_history.append(current_time)
                 self.last_pulse_count = count
             else:
-                self.data["rotation"] = "Stopped"
+                if not self.data["motor_on"]:
+                    self.data["rotation"] = "Stopped"
 
         self._emit_update()
 
@@ -276,33 +323,31 @@ class FabricEncoder:
         time_diff = current_time - self.last_rate_calc_time
 
         if time_diff >= PULSE_SAMPLE_INTERVAL:
-            pulse_diff = current_count - self.last_pulse_count
-            if time_diff > 0 and pulse_diff > 0:
+            pulse_diff = abs(current_count - self.last_pulse_count)
+
+            if time_diff > 0 and pulse_diff >= 0:
                 rate = pulse_diff / time_diff
                 self.pulse_rate_samples.append(rate)
 
                 if self.pulse_rate_samples:
                     avg_rate = sum(self.pulse_rate_samples) / len(self.pulse_rate_samples)
                     self.data["pulse_rate"] = round(avg_rate, 1)
-                    self.data["current_pulse"] = round(avg_rate)
+                    self.data["current_pulse"] = round(rate)
 
-                    if avg_rate > self.peak_pulse_rate:
-                        self.peak_pulse_rate = avg_rate
+                    if rate > self.peak_pulse_rate:
+                        self.peak_pulse_rate = rate
                         self.data["peak_pulse"] = round(self.peak_pulse_rate)
 
-                    self.data["average_pulse"] = round(
-                        sum(self.pulse_rate_samples) / len(self.pulse_rate_samples), 1
-                    )
+                    self.data["average_pulse"] = round(avg_rate, 1)
 
             self.last_rate_calc_time = current_time
 
     def _check_stop_status(self):
         with self.lock:
-            if self.data["rotation"] == "Running":
-                if time.time() - self.last_pulse_time > STOP_TIMEOUT:
-                    self.data["rotation"] = "Stopped"
-                    self.data["pulse_rate"] = 0
-                    self.data["current_pulse"] = 0
+            if time.time() - self.last_pulse_time > STOP_TIMEOUT:
+                self.data["rotation"] = "Stopped"
+                self.data["pulse_rate"] = 0
+                self.data["current_pulse"] = 0
         self._emit_update()
 
     def _emit_update(self):
@@ -325,7 +370,8 @@ class FabricEncoder:
                 "unit_cm": "cm",
                 "unit_inches": "inches",
                 "timestamp": self.data["last_update"],
-                "rotation": self.data["rotation"]
+                "rotation": self.data["rotation"],
+                "motor_on": self.data["motor_on"]
             }
 
     def get_pulse_data(self) -> Dict[str, Any]:
@@ -337,7 +383,8 @@ class FabricEncoder:
                 "pulse_rate": self.data["pulse_rate"],
                 "rotation": self.data["rotation"],
                 "timestamp": self.data["last_update"],
-                "pulses": self.data["pulses"]
+                "pulses": self.data["pulses"],
+                "motor_on": self.data["motor_on"]
             }
 
     def get_history(self, limit: int = 100) -> List[Dict[str, Any]]:
@@ -369,6 +416,7 @@ class FabricEncoder:
             self.data["current_pulse"] = 0
             self.data["average_pulse"] = 0
             self.data["peak_pulse"] = 0
+            self.data["pulse_rate"] = 0.0
             self.peak_pulse_rate = 0
             self.pulse_rate_samples.clear()
             self.pulse_history.clear()
@@ -388,7 +436,7 @@ class FabricEncoder:
         if self.ser and self.ser.is_open:
             try:
                 self.ser.close()
-            except:
+            except Exception:
                 pass
 
         if self.thread and self.thread.is_alive():
